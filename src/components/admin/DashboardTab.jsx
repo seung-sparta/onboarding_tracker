@@ -45,8 +45,8 @@ export default function DashboardTab() {
     if (!selectedTrack || !selectedCohort) return
     setLoading(true)
 
-    let mappedQuery = supabase.from('tasks').select('id').not('target_date', 'is', null)
-    let unmappedQuery = supabase.from('tasks').select('id', { count: 'exact', head: true }).is('target_date', null)
+    let mappedQuery = supabase.from('tasks').select('id').not('target_date', 'is', null).eq('track', selectedTrack).eq('cohort', selectedCohort)
+    let unmappedQuery = supabase.from('tasks').select('id', { count: 'exact', head: true }).is('target_date', null).eq('track', selectedTrack).eq('cohort', selectedCohort)
 
     if (selectedDay !== '') {
       mappedQuery = mappedQuery.eq('day_number', Number(selectedDay))

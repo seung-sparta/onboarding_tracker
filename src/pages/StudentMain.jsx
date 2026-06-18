@@ -57,7 +57,7 @@ export default function StudentMain() {
     const today = new Date().toLocaleDateString('en-CA')
 
     const [{ data: taskData }, { data: customTaskData }] = await Promise.all([
-      supabase.from('tasks').select('*').eq('target_date', today).order('day_number', { ascending: true }),
+      supabase.from('tasks').select('*').eq('target_date', today).eq('track', studentData.track).eq('cohort', studentData.cohort).order('day_number', { ascending: true }),
       studentData.is_late_joiner
         ? supabase.from('student_custom_tasks').select('*').eq('student_id', studentData.id).eq('target_date', today).order('created_at')
         : Promise.resolve({ data: [] }),
