@@ -75,7 +75,7 @@ export default function AdminDashboard() {
       {/* 탭 컨텐츠 */}
       <main className="p-6">
         {activeTab === 'dashboard' && <DashboardTab />}
-        {activeTab === 'students' && <StudentTab />}
+        {activeTab === 'students' && <StudentTab onGoToTasks={() => setActiveTab('tasks')} />}
         {activeTab === 'tasks' && <TaskTab />}
         {activeTab === 'dates' && <DateMappingTab />}
         {activeTab === 'schedule' && <ScheduleTab />}

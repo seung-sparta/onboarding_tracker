@@ -14,32 +14,35 @@ export default function DashboardTab() {
   const [progressMap, setProgressMap] = useState({})
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [threshold, setThreshold] = useState(50)
+  const [filterRate, setFilterRate] = useState('all')
 
   useEffect(() => {
-    const fetchFilters = async () => {
-      const [{ data: studentData }, { data: taskData }] = await Promise.all([
-        supabase.from('students').select('track, cohort'),
-        supabase.from('tasks').select('target_date, day_number').not('target_date', 'is', null).order('target_date'),
-      ])
-      if (studentData) {
-        setTracks([...new Set(studentData.map((s) => s.track))])
-        setCohorts([...new Set(studentData.map((s) => s.cohort))])
+    supabase.from('students').select('track, cohort').then(({ data }) => {
+      if (data) {
+        setTracks([...new Set(data.map((s) => s.track))])
+        setCohorts([...new Set(data.map((s) => s.cohort))])
       }
-      if (taskData) {
-        const seen = new Set()
-        const days = []
-        taskData.forEach((t) => {
-          if (!seen.has(t.day_number)) {
-            seen.add(t.day_number)
-            days.push(t.day_number)
-          }
-        })
-        days.sort((a, b) => a - b)
-        setAvailableDays(days)
-      }
-    }
-    fetchFilters()
+    })
   }, [])
+
+  useEffect(() => {
+    setAvailableDays([])
+    setSelectedDay('')
+    if (!selectedTrack || !selectedCohort) return
+    supabase
+      .from('tasks')
+      .select('day_number')
+      .eq('track', selectedTrack)
+      .eq('cohort', selectedCohort)
+      .not('target_date', 'is', null)
+      .then(({ data }) => {
+        if (data) {
+          const days = [...new Set(data.map((t) => t.day_number))].sort((a, b) => a - b)
+          setAvailableDays(days)
+        }
+      })
+  }, [selectedTrack, selectedCohort])
 
   const fetchData = useCallback(async () => {
     if (!selectedTrack || !selectedCohort) return
@@ -102,7 +105,15 @@ export default function DashboardTab() {
     return Math.round(((progressMap[studentId] || 0) / taskCount) * 100)
   }
 
-  const lowAchievers = students.filter((s) => getPercent(s.id) <= 50)
+  const lowAchievers = students.filter((s) => getPercent(s.id) <= threshold)
+
+  const displayedStudents = students.filter((s) => {
+    if (filterRate === 'all') return true
+    const pct = getPercent(s.id)
+    const min = Number(filterRate)
+    const max = min + 10
+    return min === 90 ? pct >= 90 : pct >= min && pct < max
+  })
 
   return (
     <div className="space-y-6">
@@ -133,6 +144,37 @@ export default function DashboardTab() {
             <option key={day} value={day}>Day {day}</option>
           ))}
         </select>
+
+        <div className="flex items-center gap-2 bg-gray-700 border border-gray-600 rounded-xl px-4 py-2">
+          <label className="text-gray-400 text-sm whitespace-nowrap">기준치</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            value={threshold}
+            onChange={(e) => {
+              const v = Math.min(100, Math.max(0, Number(e.target.value)))
+              setThreshold(v)
+            }}
+            className="w-14 bg-transparent text-white text-sm text-right focus:outline-none"
+          />
+          <span className="text-gray-400 text-sm">%</span>
+        </div>
+
+        <select
+          value={filterRate}
+          onChange={(e) => setFilterRate(e.target.value)}
+          className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+          <option value="all">전체 달성률</option>
+          {[0,10,20,30,40,50,60,70,80,90].map((n) => (
+            <option key={n} value={n}>
+              {n === 90 ? '90% 이상' : `${n}~${n+10}%`}
+            </option>
+          ))}
+        </select>
+
         {selectedTrack && selectedCohort && (
           <div className="flex items-center gap-3 ml-auto">
             {lastUpdated && (
@@ -179,7 +221,7 @@ export default function DashboardTab() {
                   <p className="text-3xl font-bold text-white">{students.length}명</p>
                 </div>
                 <div className="bg-gray-800 rounded-2xl p-5">
-                  <p className="text-gray-400 text-sm mb-1">달성률 50% 이하</p>
+                  <p className="text-gray-400 text-sm mb-1">달성률 {threshold}% 이하</p>
                   <p className="text-3xl font-bold text-red-400">{lowAchievers.length}명</p>
                 </div>
               </div>
@@ -195,9 +237,9 @@ export default function DashboardTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map((s) => {
+                    {displayedStudents.map((s) => {
                       const pct = getPercent(s.id)
-                      const isLow = pct <= 50
+                      const isLow = pct <= threshold
                       return (
                         <tr key={s.id} className={`border-t border-gray-700 ${isLow ? 'bg-red-900/40' : ''}`}>
                           <td className="px-4 py-3 text-white">{s.name}</td>

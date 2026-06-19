@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import * as XLSX from 'xlsx'
 
 const emptyForm = { name: '', track: '', cohort: '' }
 
-export default function StudentTab() {
+export default function StudentTab({ onGoToTasks }) {
   const [students, setStudents] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
@@ -26,6 +27,12 @@ export default function StudentTab() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkTrack, setBulkTrack] = useState('')
   const [bulkCohort, setBulkCohort] = useState('')
+
+  const fileInputRef = useRef(null)
+  const [xlsxModal, setXlsxModal] = useState(false)
+  const [xlsxRows, setXlsxRows] = useState([])
+  const [xlsxUploading, setXlsxUploading] = useState(false)
+  const [xlsxResult, setXlsxResult] = useState(null)
 
   const fetchStudents = async () => {
     const { data } = await supabase.from('students').select('*').order('created_at', { ascending: false })
@@ -118,12 +125,15 @@ export default function StudentTab() {
 
   const openBulkModal = () => {
     const todayStr = new Date().toLocaleDateString('en-CA')
+    const filteredLateJoiners = lateJoiners.filter(
+      (s) => s.track === filterTrack && s.cohort === filterCohort
+    )
     setBulkDate(todayStr)
     setBulkTitles([])
     setBulkInput('')
-    setBulkTrack('')
-    setBulkCohort('')
-    setBulkSelected(lateJoiners.map((s) => s.id))
+    setBulkTrack(filterTrack)
+    setBulkCohort(filterCohort)
+    setBulkSelected(filteredLateJoiners.map((s) => s.id))
     setBulkModal(true)
   }
 
@@ -154,6 +164,110 @@ export default function StudentTab() {
     setBulkModal(false)
   }
 
+  const handleXlsxFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target.result, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      if (raw.length < 2) { alert('데이터가 없습니다.'); return }
+
+      const header = raw[0].map((h) => String(h).trim())
+      const nameIdx = header.findIndex((h) => h === '이름')
+      const trackIdx = header.findIndex((h) => h === '트랙')
+      const cohortIdx = header.findIndex((h) => h === '기수')
+      const lateIdx = header.findIndex((h) => h === '중간합류자')
+      const joinDateIdx = header.findIndex((h) => h === '합류일')
+
+      if (nameIdx === -1 || trackIdx === -1 || cohortIdx === -1) {
+        alert('열 이름이 올바르지 않습니다.\n첫 행에 "이름", "트랙", "기수" 열이 있어야 합니다.')
+        return
+      }
+
+      const truthy = new Set(['y', 'yes', '예', 'o', 'true', '1', '중간합류', '중간합류자'])
+      const rows = raw.slice(1).map((row, i) => {
+        const name = String(row[nameIdx] ?? '').trim()
+        const track = String(row[trackIdx] ?? '').trim()
+        const cohort = String(row[cohortIdx] ?? '').trim()
+        const rawLate = lateIdx !== -1 ? String(row[lateIdx] ?? '').trim() : ''
+        const is_late_joiner = truthy.has(rawLate.toLowerCase())
+        const rawDate = joinDateIdx !== -1 ? String(row[joinDateIdx] ?? '').trim() : ''
+        const join_date = rawDate || null
+        const errors = []
+        if (!name) errors.push('이름 없음')
+        if (!track) errors.push('트랙 없음')
+        if (!cohort) errors.push('기수 없음')
+        return { _row: i + 2, name, track, cohort, is_late_joiner, join_date, errors }
+      }).filter((r) => r.name || r.track || r.cohort)
+
+      setXlsxRows(rows)
+      setXlsxResult(null)
+      setXlsxModal(true)
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['이름', '트랙', '기수', '중간합류자', '합류일'],
+      ['홍길동', 'Unity', '6기', '', ''],
+      ['김철수', 'Unreal', '7기', 'Y', '2026-06-19'],
+    ])
+    ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '수강생')
+    XLSX.writeFile(wb, '수강생_업로드_템플릿.xlsx')
+  }
+
+  const applyXlsx = async () => {
+    const valid = xlsxRows.filter((r) => r.errors.length === 0)
+    if (valid.length === 0) return
+    setXlsxUploading(true)
+
+    const { data: existing } = await supabase.from('students').select('name, track, cohort')
+    const existingKeys = new Set((existing || []).map((s) => `${s.name}||${s.track}||${s.cohort}`))
+    const batchKeys = new Set()
+    const renamed = []
+
+    const rows = valid.map(({ name, track, cohort, is_late_joiner, join_date }) => {
+      let finalName = name
+      while (
+        existingKeys.has(`${finalName}||${track}||${cohort}`) ||
+        batchKeys.has(`${finalName}||${track}||${cohort}`)
+      ) {
+        finalName += 'B'
+      }
+      if (finalName !== name) renamed.push({ from: name, to: finalName })
+      batchKeys.add(`${finalName}||${track}||${cohort}`)
+      return { name: finalName, track, cohort, is_late_joiner, join_date }
+    })
+
+    const { error } = await supabase.from('students').insert(rows)
+    if (error) {
+      setXlsxUploading(false)
+      setXlsxResult({ success: false, message: error.message })
+      return
+    }
+
+    const uniquePairs = [...new Set(rows.map((r) => `${r.track}||${r.cohort}`))]
+      .map((key) => { const [track, cohort] = key.split('||'); return { track, cohort } })
+
+    const { data: taskData } = await supabase
+      .from('tasks')
+      .select('track, cohort')
+      .in('track', uniquePairs.map((p) => p.track))
+
+    const hasTask = new Set((taskData || []).map((t) => `${t.track}||${t.cohort}`))
+    const noTaskPairs = uniquePairs.filter((p) => !hasTask.has(`${p.track}||${p.cohort}`))
+
+    setXlsxUploading(false)
+    setXlsxResult({ success: true, count: valid.length, renamed, noTaskPairs })
+    fetchStudents()
+  }
+
   const filtered = students.filter((s) => {
     if (filterTrack && s.track !== filterTrack) return false
     if (filterCohort && s.cohort !== filterCohort) return false
@@ -162,6 +276,14 @@ export default function StudentTab() {
 
   return (
     <div className="space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={handleXlsxFile}
+      />
+
       <form onSubmit={handleSubmit} className="bg-gray-800 rounded-2xl p-5 flex gap-3 flex-wrap">
         <input
           type="text"
@@ -199,6 +321,26 @@ export default function StudentTab() {
             취소
           </button>
         )}
+        <button
+          type="button"
+          onClick={downloadTemplate}
+          className="bg-gray-600 hover:bg-gray-500 text-white text-sm font-semibold rounded-xl px-5 py-2 transition flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          템플릿 다운로드
+        </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl px-5 py-2 transition flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          엑셀 업로드
+        </button>
       </form>
 
       {lateJoiners.length > 0 && filterTrack && filterCohort && (
@@ -454,6 +596,146 @@ export default function StudentTab() {
                 {bulkSaving ? '적용 중...' : `${bulkSelected.length}명에게 ${bulkTitles.length}개 일괄 적용`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 엑셀 업로드 미리보기 모달 */}
+      {xlsxModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-700 flex-shrink-0">
+              <div>
+                <h3 className="text-white font-bold">엑셀 업로드 미리보기</h3>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  총 {xlsxRows.length}행 / 유효 {xlsxRows.filter((r) => r.errors.length === 0).length}명 /
+                  오류 {xlsxRows.filter((r) => r.errors.length > 0).length}행
+                </p>
+              </div>
+              <button onClick={() => setXlsxModal(false)} className="text-gray-400 hover:text-white transition">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5">
+              {xlsxResult ? (
+                <div className={`rounded-xl p-5 text-center ${xlsxResult.success ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
+                  {xlsxResult.success ? (
+                    <>
+                      <p className="text-green-300 font-bold text-lg">{xlsxResult.count}명 등록 완료</p>
+                      {xlsxResult.noTaskPairs?.length > 0 && (
+                        <div className="mt-3 text-left bg-red-900/30 border border-red-600/50 rounded-xl px-4 py-3">
+                          <p className="text-red-300 text-xs font-semibold mb-2">
+                            할 일이 없는 트랙+기수가 있습니다. 할 일을 생성해주세요!
+                          </p>
+                          <ul className="space-y-1 mb-3">
+                            {xlsxResult.noTaskPairs.map((p, i) => (
+                              <li key={i} className="text-red-400/80 text-xs font-medium">
+                                {p.track} · {p.cohort}
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            onClick={() => { setXlsxModal(false); onGoToTasks?.() }}
+                            className="w-full py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition"
+                          >
+                            할 일 관리 탭으로 이동
+                          </button>
+                        </div>
+                      )}
+                      {xlsxResult.renamed.length > 0 && (
+                        <div className="mt-3 text-left bg-yellow-900/20 border border-yellow-700/40 rounded-xl px-4 py-3">
+                          <p className="text-yellow-300 text-xs font-semibold mb-2">
+                            중복으로 이름 변경됨 ({xlsxResult.renamed.length}명)
+                          </p>
+                          <ul className="space-y-1">
+                            {xlsxResult.renamed.map((r, i) => (
+                              <li key={i} className="text-yellow-400/80 text-xs">
+                                {r.from} → <span className="font-semibold">{r.to}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setXlsxModal(false)}
+                        className="mt-4 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl px-6 py-2 transition"
+                      >
+                        닫기
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-red-300 font-bold">오류 발생</p>
+                      <p className="text-red-400 text-sm mt-1">{xlsxResult.message}</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="text-xs text-gray-500 mb-3">빨간 행은 오류로 제외됩니다</div>
+                  <div className="rounded-xl overflow-hidden border border-gray-700">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-700">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold">행</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold">이름</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold">트랙</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold">기수</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-semibold whitespace-nowrap">중간합류자</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold whitespace-nowrap">합류일</th>
+                          <th className="text-left px-3 py-2 text-gray-300 font-semibold">상태</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {xlsxRows.map((row) => (
+                          <tr
+                            key={row._row}
+                            className={`border-t border-gray-700 ${row.errors.length > 0 ? 'bg-red-900/20' : ''}`}
+                          >
+                            <td className="px-3 py-2 text-gray-500">{row._row}</td>
+                            <td className="px-3 py-2 text-white">{row.name || <span className="text-red-400 italic">없음</span>}</td>
+                            <td className="px-3 py-2 text-gray-300">{row.track || <span className="text-red-400 italic">없음</span>}</td>
+                            <td className="px-3 py-2 text-gray-300">{row.cohort || <span className="text-red-400 italic">없음</span>}</td>
+                            <td className="px-3 py-2 text-center">
+                              {row.is_late_joiner
+                                ? <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-semibold">Y</span>
+                                : <span className="text-gray-600 text-xs">-</span>}
+                            </td>
+                            <td className="px-3 py-2 text-gray-300 text-xs">
+                              {row.join_date || <span className="text-gray-600">-</span>}
+                            </td>
+                            <td className="px-3 py-2">
+                              {row.errors.length === 0 ? (
+                                <span className="text-green-400 text-xs">정상</span>
+                              ) : (
+                                <span className="text-red-400 text-xs">{row.errors.join(', ')}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {!xlsxResult && (
+              <div className="p-5 border-t border-gray-700 flex-shrink-0">
+                <button
+                  onClick={applyXlsx}
+                  disabled={xlsxUploading || xlsxRows.filter((r) => r.errors.length === 0).length === 0}
+                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm transition disabled:opacity-50"
+                >
+                  {xlsxUploading
+                    ? '등록 중...'
+                    : `유효한 ${xlsxRows.filter((r) => r.errors.length === 0).length}명 등록`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
