@@ -283,9 +283,9 @@ export default function StudentMain() {
       {/* 상단 바 */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md shadow-sm px-6 py-3">
         <div className="max-w-lg mx-auto flex items-center gap-4">
-          <img src="/check-ltani.png" alt="르탄이" className="w-16 h-16 object-contain flex-shrink-0" />
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
+          <img src="/check-ltani.png" alt="르탄이" className="w-12 h-12 sm:w-16 sm:h-16 object-contain flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
               <p className="text-sm font-semibold text-gray-700">{student.name}님의 오늘 달성률</p>
               {timeLeft && (
                 <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
@@ -316,8 +316,8 @@ export default function StudentMain() {
       </div>
 
       {/* 메인 카드 */}
-      <div className="flex justify-center px-4 py-8">
-        <div className={`bg-white rounded-3xl shadow-2xl p-8 w-full flex gap-8 transition-all duration-500 ${savedPlan && Object.keys(savedPlan).length > 0 ? 'max-w-4xl' : 'max-w-lg'}`}>
+      <div className="flex justify-center px-4 py-6 sm:py-8">
+        <div className={`bg-white rounded-3xl shadow-2xl p-4 sm:p-8 w-full flex flex-col gap-6 transition-all duration-500 ${savedPlan && Object.keys(savedPlan).length > 0 ? 'max-w-4xl lg:flex-row lg:gap-8' : 'max-w-lg'}`}>
 
           {/* 할 일 목록 */}
           <div className="flex-1 min-w-0">
@@ -443,7 +443,7 @@ export default function StudentMain() {
 
           {/* 타임라인 (저장 후에만 표시) */}
           {savedPlan && Object.keys(savedPlan).length > 0 && (
-            <div className="w-56 flex-shrink-0 border-l border-gray-100 pl-8">
+            <div className="border-t border-gray-100 pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:w-56 lg:flex-shrink-0 lg:pl-8">
               <h3 className="text-lg font-bold text-gray-800 mb-1">오늘의 타임라인</h3>
               <p className="text-gray-400 text-xs mb-4">나만의 하루 계획</p>
               <div className="space-y-1">

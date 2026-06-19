@@ -105,10 +105,56 @@ export default function Planner({ tasks, customTasks = [], studentId, onClose, o
         </div>
 
         {/* 바디 */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
+
+          {/* 할 일 목록 사이드바 (모바일: 상단 고정, sm+: 우측 사이드바) */}
+          <div
+            className="order-1 sm:order-2 w-full sm:w-56 border-b sm:border-b-0 sm:border-l border-gray-700 flex flex-col sm:flex-shrink-0"
+            onDragOver={handleDragOver}
+            onDrop={handleDropOnList}
+          >
+            <div className="px-4 pt-4 pb-2 flex-shrink-0">
+              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">할 일 목록</p>
+              <p className="text-gray-600 text-xs mt-0.5">타임라인으로 드래그</p>
+            </div>
+            <div className="overflow-y-auto px-4 pb-4 space-y-2 max-h-36 sm:max-h-none sm:flex-1">
+              {unplacedCommon.map((task) => (
+                <div
+                  key={task.id}
+                  draggable
+                  onDragStart={() => handleDragStart(task.id, 'list')}
+                  className="bg-gray-800 border border-gray-600 rounded-xl px-3 py-2.5 text-sm text-white cursor-grab active:cursor-grabbing hover:border-purple-500 hover:bg-gray-700 transition select-none"
+                >
+                  {task.title}
+                </div>
+              ))}
+
+              {unplacedCustom.length > 0 && (
+                <>
+                  {unplacedCustom.map((task) => (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={() => handleDragStart(task.id, 'list')}
+                      className="bg-orange-900/30 border border-orange-700/50 rounded-xl px-3 py-2.5 text-sm text-white cursor-grab active:cursor-grabbing hover:border-orange-500 hover:bg-orange-900/50 transition select-none"
+                    >
+                      {task.title}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {unplacedCommon.length === 0 && unplacedCustom.length === 0 && (
+                <div className="text-center py-4 sm:py-8">
+                  <p className="text-2xl mb-2">🎉</p>
+                  <p className="text-gray-400 text-xs">모든 할 일을<br />배치했어요!</p>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* 타임라인 */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="order-2 sm:order-1 flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-1.5">
               {SLOTS.map((slot) => {
                 const taskIds = plan[slot] || []
@@ -167,52 +213,6 @@ export default function Planner({ tasks, customTasks = [], studentId, onClose, o
                 <span className="text-gray-500 text-xs w-12 text-right font-mono">16:00</span>
                 <div className="flex-1 border-t border-gray-700" />
               </div>
-            </div>
-          </div>
-
-          {/* 할 일 목록 사이드바 */}
-          <div
-            className="w-56 border-l border-gray-700 flex flex-col flex-shrink-0"
-            onDragOver={handleDragOver}
-            onDrop={handleDropOnList}
-          >
-            <div className="px-4 pt-4 pb-2 flex-shrink-0">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">할 일 목록</p>
-              <p className="text-gray-600 text-xs mt-0.5">타임라인으로 드래그</p>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-              {unplacedCommon.map((task) => (
-                <div
-                  key={task.id}
-                  draggable
-                  onDragStart={() => handleDragStart(task.id, 'list')}
-                  className="bg-gray-800 border border-gray-600 rounded-xl px-3 py-2.5 text-sm text-white cursor-grab active:cursor-grabbing hover:border-purple-500 hover:bg-gray-700 transition select-none"
-                >
-                  {task.title}
-                </div>
-              ))}
-
-              {unplacedCustom.length > 0 && (
-                <>
-                  {unplacedCustom.map((task) => (
-                    <div
-                      key={task.id}
-                      draggable
-                      onDragStart={() => handleDragStart(task.id, 'list')}
-                      className="bg-orange-900/30 border border-orange-700/50 rounded-xl px-3 py-2.5 text-sm text-white cursor-grab active:cursor-grabbing hover:border-orange-500 hover:bg-orange-900/50 transition select-none"
-                    >
-                      {task.title}
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {unplacedCommon.length === 0 && unplacedCustom.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-2xl mb-2">🎉</p>
-                  <p className="text-gray-400 text-xs">모든 할 일을<br />배치했어요!</p>
-                </div>
-              )}
             </div>
           </div>
 
