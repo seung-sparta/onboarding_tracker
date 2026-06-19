@@ -8,8 +8,8 @@ export default function StudentTab({ onGoToTasks }) {
   const [students, setStudents] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState(null)
-  const [filterTrack, setFilterTrack] = useState('')
-  const [filterCohort, setFilterCohort] = useState('')
+  const [filterTrack, setFilterTrack] = useState(() => localStorage.getItem('admin_track') || '')
+  const [filterCohort, setFilterCohort] = useState(() => localStorage.getItem('admin_cohort') || '')
   const [tracks, setTracks] = useState([])
   const [cohorts, setCohorts] = useState([])
 
@@ -361,7 +361,7 @@ export default function StudentTab({ onGoToTasks }) {
       <div className="flex gap-3">
         <select
           value={filterTrack}
-          onChange={(e) => setFilterTrack(e.target.value)}
+          onChange={(e) => { setFilterTrack(e.target.value); localStorage.setItem('admin_track', e.target.value); setFilterCohort(''); localStorage.removeItem('admin_cohort') }}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none"
         >
           <option value="">전체 트랙</option>
@@ -369,7 +369,7 @@ export default function StudentTab({ onGoToTasks }) {
         </select>
         <select
           value={filterCohort}
-          onChange={(e) => setFilterCohort(e.target.value)}
+          onChange={(e) => { setFilterCohort(e.target.value); localStorage.setItem('admin_cohort', e.target.value) }}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none"
         >
           <option value="">전체 기수</option>

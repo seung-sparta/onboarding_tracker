@@ -5,8 +5,8 @@ export default function DashboardTab() {
   const [tracks, setTracks] = useState([])
   const [cohorts, setCohorts] = useState([])
   const [availableDays, setAvailableDays] = useState([])
-  const [selectedTrack, setSelectedTrack] = useState('')
-  const [selectedCohort, setSelectedCohort] = useState('')
+  const [selectedTrack, setSelectedTrack] = useState(() => localStorage.getItem('admin_track') || '')
+  const [selectedCohort, setSelectedCohort] = useState(() => localStorage.getItem('admin_cohort') || '')
   const [selectedDay, setSelectedDay] = useState('')
   const [students, setStudents] = useState([])
   const [taskCount, setTaskCount] = useState(0)
@@ -120,7 +120,7 @@ export default function DashboardTab() {
       <div className="flex flex-wrap gap-3 items-center">
         <select
           value={selectedTrack}
-          onChange={(e) => setSelectedTrack(e.target.value)}
+          onChange={(e) => { setSelectedTrack(e.target.value); localStorage.setItem('admin_track', e.target.value); setSelectedCohort(''); localStorage.removeItem('admin_cohort') }}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         >
           <option value="">트랙 선택</option>
@@ -128,7 +128,7 @@ export default function DashboardTab() {
         </select>
         <select
           value={selectedCohort}
-          onChange={(e) => setSelectedCohort(e.target.value)}
+          onChange={(e) => { setSelectedCohort(e.target.value); localStorage.setItem('admin_cohort', e.target.value) }}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         >
           <option value="">기수 선택</option>

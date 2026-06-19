@@ -7,8 +7,8 @@ export default function DateMappingTab() {
   const [taskCounts, setTaskCounts] = useState({})
   const [mappedCounts, setMappedCounts] = useState({})
   const [saving, setSaving] = useState({})
-  const [selectedTrack, setSelectedTrack] = useState('')
-  const [selectedCohort, setSelectedCohort] = useState('')
+  const [selectedTrack, setSelectedTrack] = useState(() => localStorage.getItem('admin_track') || '')
+  const [selectedCohort, setSelectedCohort] = useState(() => localStorage.getItem('admin_cohort') || '')
   const [tracks, setTracks] = useState([])
   const [cohorts, setCohorts] = useState([])
 
@@ -95,7 +95,7 @@ export default function DateMappingTab() {
       <div className="flex gap-3 flex-wrap items-center">
         <select
           value={selectedTrack}
-          onChange={(e) => { setSelectedTrack(e.target.value); setSelectedCohort('') }}
+          onChange={(e) => { setSelectedTrack(e.target.value); localStorage.setItem('admin_track', e.target.value); setSelectedCohort(''); localStorage.removeItem('admin_cohort') }}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         >
           <option value="">트랙 선택</option>
@@ -103,7 +103,7 @@ export default function DateMappingTab() {
         </select>
         <select
           value={selectedCohort}
-          onChange={(e) => setSelectedCohort(e.target.value)}
+          onChange={(e) => { setSelectedCohort(e.target.value); localStorage.setItem('admin_cohort', e.target.value) }}
           disabled={!selectedTrack}
           className="bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-40"
         >
