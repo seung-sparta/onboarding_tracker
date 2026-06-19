@@ -14,7 +14,7 @@ export default function DashboardTab() {
   const [progressMap, setProgressMap] = useState({})
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [threshold, setThreshold] = useState(50)
+  const [threshold, setThreshold] = useState(() => Number(localStorage.getItem('dashboard_threshold') ?? 50))
   const [filterRate, setFilterRate] = useState('all')
 
   useEffect(() => {
@@ -156,6 +156,7 @@ export default function DashboardTab() {
             onChange={(e) => {
               const v = Math.min(100, Math.max(0, Number(e.target.value)))
               setThreshold(v)
+              localStorage.setItem('dashboard_threshold', v)
             }}
             className="w-14 bg-transparent text-white text-sm text-right focus:outline-none"
           />
