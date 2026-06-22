@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 
 export default function DashboardTab() {
@@ -16,6 +16,11 @@ export default function DashboardTab() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [threshold, setThreshold] = useState(() => Number(localStorage.getItem('dashboard_threshold') ?? 50))
   const [filterRate, setFilterRate] = useState('all')
+
+  const [detailStudent, setDetailStudent] = useState(null)
+  const [detailTasks, setDetailTasks] = useState([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const detailIntervalRef = useRef(null)
 
   useEffect(() => {
     supabase.from('students').select('track, cohort').then(({ data }) => {
@@ -99,6 +104,59 @@ export default function DashboardTab() {
     const interval = setInterval(fetchData, 300000)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  const fetchDetailTasks = useCallback(async (student) => {
+    setDetailLoading(true)
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .not('target_date', 'is', null)
+      .eq('track', student.track)
+      .eq('cohort', student.cohort)
+      .order('day_number', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (selectedDay !== '') query = query.eq('day_number', Number(selectedDay))
+
+    const { data: taskData } = await query
+
+    if (taskData && taskData.length > 0) {
+      const { data: progressData } = await supabase
+        .from('progress')
+        .select('task_id, is_completed, completed_at')
+        .eq('student_id', student.id)
+        .in('task_id', taskData.map((t) => t.id))
+
+      const progressMap = {}
+      progressData?.forEach((p) => { progressMap[p.task_id] = p })
+
+      setDetailTasks(taskData.map((t) => ({ ...t, progress: progressMap[t.id] || null })))
+    } else {
+      setDetailTasks([])
+    }
+    setDetailLoading(false)
+  }, [selectedDay])
+
+  const openDetail = useCallback((student) => {
+    setDetailStudent(student)
+    fetchDetailTasks(student)
+    detailIntervalRef.current = setInterval(() => fetchDetailTasks(student), 10000)
+  }, [fetchDetailTasks])
+
+  const closeDetail = useCallback(() => {
+    setDetailStudent(null)
+    setDetailTasks([])
+    if (detailIntervalRef.current) {
+      clearInterval(detailIntervalRef.current)
+      detailIntervalRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (detailIntervalRef.current) clearInterval(detailIntervalRef.current)
+    }
+  }, [])
 
   const getPercent = (studentId) => {
     if (taskCount === 0) return 0
@@ -235,6 +293,7 @@ export default function DashboardTab() {
                       <th className="text-right px-4 py-3 text-gray-300 font-semibold">완료</th>
                       <th className="text-right px-4 py-3 text-gray-300 font-semibold">달성률</th>
                       <th className="px-4 py-3 text-gray-300 font-semibold w-40">진행 바</th>
+                      <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -254,6 +313,14 @@ export default function DashboardTab() {
                               />
                             </div>
                           </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => openDetail(s)}
+                              className="text-xs text-purple-400 hover:text-purple-300 border border-purple-700 hover:border-purple-500 rounded-lg px-2.5 py-1 transition whitespace-nowrap"
+                            >
+                              자세히 보기
+                            </button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -264,6 +331,110 @@ export default function DashboardTab() {
           )}
         </>
       )}
+
+      {/* 자세히 보기 모달 */}
+      {detailStudent && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-700 flex-shrink-0">
+              <div>
+                <h3 className="text-white font-bold text-base">{detailStudent.name}님의 할 일 현황</h3>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {detailTasks.filter((t) => t.progress?.is_completed).length}/{detailTasks.length} 완료 · 10초마다 자동 갱신
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchDetailTasks(detailStudent)}
+                  disabled={detailLoading}
+                  className="text-gray-400 hover:text-white transition disabled:opacity-40"
+                  title="새로고침"
+                >
+                  <svg className={`w-4 h-4 ${detailLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button onClick={closeDetail} className="text-gray-400 hover:text-white transition">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 할 일 목록 */}
+            <div className="overflow-y-auto flex-1 p-5">
+              {detailLoading && detailTasks.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">불러오는 중...</p>
+              ) : detailTasks.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-8">등록된 할 일이 없습니다.</p>
+              ) : (
+                <DetailTaskList tasks={detailTasks} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DetailTaskList({ tasks }) {
+  const byDay = tasks.reduce((acc, t) => {
+    const key = t.day_number
+    if (!acc[key]) acc[key] = []
+    acc[key].push(t)
+    return acc
+  }, {})
+
+  const days = Object.keys(byDay).sort((a, b) => Number(a) - Number(b))
+
+  return (
+    <div className="space-y-5">
+      {days.map((day) => {
+        const dayTasks = byDay[day]
+        const doneCount = dayTasks.filter((t) => t.progress?.is_completed).length
+        return (
+          <div key={day}>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xs font-bold text-purple-400 bg-purple-400/10 px-2.5 py-0.5 rounded-full">
+                Day {day}
+              </span>
+              <span className="text-xs text-gray-500">{doneCount}/{dayTasks.length}</span>
+              <div className="flex-1 h-px bg-gray-700" />
+            </div>
+            <ul className="space-y-2">
+              {dayTasks.map((task) => {
+                const done = task.progress?.is_completed
+                const completedAt = task.progress?.completed_at
+                  ? new Date(task.progress.completed_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                  : null
+                return (
+                  <li key={task.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 ${done ? 'bg-green-900/20 border border-green-700/40' : 'bg-gray-700/50 border border-gray-700'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${done ? 'bg-green-500' : 'border-2 border-gray-500'}`}>
+                      {done && (
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className={`flex-1 text-sm ${done ? 'text-green-300' : 'text-gray-300'}`}>
+                      {task.title}
+                    </span>
+                    {completedAt && (
+                      <span className="text-xs text-gray-500 flex-shrink-0">{completedAt}</span>
+                    )}
+                    {!done && (
+                      <span className="text-xs text-gray-600 flex-shrink-0">미완료</span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
     </div>
   )
 }
