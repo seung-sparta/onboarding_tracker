@@ -9,6 +9,7 @@ export default function DashboardTab() {
   const [selectedCohort, setSelectedCohort] = useState(() => localStorage.getItem('admin_cohort') || '')
   const [selectedDay, setSelectedDay] = useState('')
   const [students, setStudents] = useState([])
+  const [withdrawnStudents, setWithdrawnStudents] = useState([])
   const [taskCount, setTaskCount] = useState(0)
   const [unmappedCount, setUnmappedCount] = useState(0)
   const [progressMap, setProgressMap] = useState({})
@@ -71,29 +72,34 @@ export default function DashboardTab() {
     setTaskCount(taskData?.length || 0)
     setUnmappedCount(unmapped || 0)
 
-    if (studentData && taskData && taskData.length > 0) {
-      const studentIds = studentData.map((s) => s.id)
-      const taskIds = taskData.map((t) => t.id)
+    if (studentData) {
+      const active = studentData.filter((s) => !s.is_withdrawn)
+      const withdrawn = studentData.filter((s) => s.is_withdrawn)
+      setWithdrawnStudents(withdrawn)
 
-      const { data: progressData } = await supabase
-        .from('progress')
-        .select('student_id')
-        .in('student_id', studentIds)
-        .in('task_id', taskIds)
-        .eq('is_completed', true)
+      if (taskData && taskData.length > 0) {
+        const studentIds = active.map((s) => s.id)
+        const taskIds = taskData.map((t) => t.id)
 
-      const map = {}
-      studentIds.forEach((id) => { map[id] = 0 })
-      progressData?.forEach((p) => {
-        map[p.student_id] = (map[p.student_id] || 0) + 1
-      })
-      setProgressMap(map)
-      setStudents(studentData)
-    } else if (studentData) {
-      const map = {}
-      studentData.forEach((s) => { map[s.id] = 0 })
-      setProgressMap(map)
-      setStudents(studentData)
+        const { data: progressData } = await supabase
+          .from('progress')
+          .select('student_id')
+          .in('student_id', studentIds)
+          .in('task_id', taskIds)
+          .eq('is_completed', true)
+
+        const map = {}
+        studentIds.forEach((id) => { map[id] = 0 })
+        progressData?.forEach((p) => {
+          map[p.student_id] = (map[p.student_id] || 0) + 1
+        })
+        setProgressMap(map)
+      } else {
+        const map = {}
+        active.forEach((s) => { map[s.id] = 0 })
+        setProgressMap(map)
+      }
+      setStudents(active)
     }
 
     setLoading(false)
@@ -192,7 +198,6 @@ export default function DashboardTab() {
   }
 
   const lowAchievers = students.filter((s) => getPercent(s.id) <= threshold)
-  const withdrawnStudents = students.filter((s) => s.is_withdrawn)
 
   const displayedStudents = students.filter((s) => {
     if (filterRate === 'all') return true
