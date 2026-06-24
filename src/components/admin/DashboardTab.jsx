@@ -19,6 +19,7 @@ export default function DashboardTab() {
 
   const [detailStudent, setDetailStudent] = useState(null)
   const [detailTasks, setDetailTasks] = useState([])
+  const [detailCustomTasks, setDetailCustomTasks] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
   const detailIntervalRef = useRef(null)
 
@@ -134,6 +135,32 @@ export default function DashboardTab() {
     } else {
       setDetailTasks([])
     }
+
+    // 중간 합류자 추가 할 일 조회
+    let customTasks = []
+    if (student.is_late_joiner) {
+      let customQuery = supabase
+        .from('student_custom_tasks')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('target_date', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (selectedDay !== '') {
+        // 선택된 Day의 target_date와 일치하는 추가 할 일만 표시
+        const targetDate = taskData?.[0]?.target_date ?? null
+        if (targetDate) {
+          customQuery = customQuery.eq('target_date', targetDate)
+          const { data: customData } = await customQuery
+          customTasks = customData || []
+        }
+      } else {
+        const { data: customData } = await customQuery
+        customTasks = customData || []
+      }
+    }
+    setDetailCustomTasks(customTasks)
+
     setDetailLoading(false)
   }, [selectedDay])
 
@@ -146,6 +173,7 @@ export default function DashboardTab() {
   const closeDetail = useCallback(() => {
     setDetailStudent(null)
     setDetailTasks([])
+    setDetailCustomTasks([])
     if (detailIntervalRef.current) {
       clearInterval(detailIntervalRef.current)
       detailIntervalRef.current = null
@@ -341,7 +369,7 @@ export default function DashboardTab() {
               <div>
                 <h3 className="text-white font-bold text-base">{detailStudent.name}님의 할 일 현황</h3>
                 <p className="text-gray-400 text-xs mt-0.5">
-                  {detailTasks.filter((t) => t.progress?.is_completed).length}/{detailTasks.length} 완료 · 10초마다 자동 갱신
+                  {detailTasks.filter((t) => t.progress?.is_completed).length + detailCustomTasks.filter((t) => t.is_completed).length}/{detailTasks.length + detailCustomTasks.length} 완료 · 10초마다 자동 갱신
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -365,17 +393,64 @@ export default function DashboardTab() {
 
             {/* 할 일 목록 */}
             <div className="overflow-y-auto flex-1 p-5">
-              {detailLoading && detailTasks.length === 0 ? (
+              {detailLoading && detailTasks.length === 0 && detailCustomTasks.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-8">불러오는 중...</p>
-              ) : detailTasks.length === 0 ? (
+              ) : detailTasks.length === 0 && detailCustomTasks.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-8">등록된 할 일이 없습니다.</p>
               ) : (
-                <DetailTaskList tasks={detailTasks} />
+                <div className="space-y-5">
+                  {detailTasks.length > 0 && <DetailTaskList tasks={detailTasks} />}
+                  {detailCustomTasks.length > 0 && <CustomTaskList tasks={detailCustomTasks} />}
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function CustomTaskList({ tasks }) {
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-xs font-bold text-orange-400 bg-orange-400/10 px-2.5 py-0.5 rounded-full">
+          추가 할 일
+        </span>
+        <span className="text-xs text-gray-500">
+          {tasks.filter((t) => t.is_completed).length}/{tasks.length}
+        </span>
+        <div className="flex-1 h-px bg-gray-700" />
+      </div>
+      <ul className="space-y-2">
+        {tasks.map((task) => {
+          const done = task.is_completed
+          const completedAt = task.completed_at
+            ? new Date(task.completed_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            : null
+          return (
+            <li key={task.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 ${done ? 'bg-green-900/20 border border-green-700/40' : 'bg-gray-700/50 border border-gray-700'}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${done ? 'bg-green-500' : 'border-2 border-gray-500'}`}>
+                {done && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span className={`flex-1 text-sm ${done ? 'text-green-300' : 'text-gray-300'}`}>
+                {task.title}
+              </span>
+              {completedAt && (
+                <span className="text-xs text-gray-500 flex-shrink-0">{completedAt}</span>
+              )}
+              {!done && (
+                <span className="text-xs text-gray-600 flex-shrink-0">미완료</span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
