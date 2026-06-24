@@ -48,12 +48,22 @@ export default function RemindTab() {
         message: form.message.trim() || DEFAULT_MESSAGE,
       }).eq('id', editId)
     } else {
-      await supabase.from('reminders').upsert({
+      const { count } = await supabase
+        .from('reminders')
+        .select('id', { count: 'exact', head: true })
+        .eq('track', form.track)
+        .eq('cohort', form.cohort)
+      if (count >= 5) {
+        alert(`${form.track} · ${form.cohort}의 리마인드는 최대 5개까지만 설정할 수 있습니다.`)
+        setSaving(false)
+        return
+      }
+      await supabase.from('reminders').insert({
         track: form.track,
         cohort: form.cohort,
         remind_time: form.remind_time,
         message: form.message.trim() || DEFAULT_MESSAGE,
-      }, { onConflict: 'track,cohort' })
+      })
     }
     setSaving(false)
     setForm(emptyForm)
@@ -195,9 +205,18 @@ export default function RemindTab() {
                 </td>
               </tr>
             ) : (
-              reminders.map((r) => (
+              reminders.map((r) => {
+                const groupCount = reminders.filter((x) => x.track === r.track && x.cohort === r.cohort).length
+                return (
                 <tr key={r.id} className="border-t border-gray-700">
-                  <td className="px-4 py-3 text-white">{r.track}</td>
+                  <td className="px-4 py-3 text-white">
+                    <div className="flex items-center gap-2">
+                      {r.track}
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${groupCount >= 5 ? 'bg-red-500/20 text-red-400' : 'bg-gray-600 text-gray-400'}`}>
+                        {groupCount}/5
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-300">{r.cohort}</td>
                   <td className="px-4 py-3">
                     <span className="bg-purple-900/50 text-purple-300 rounded text-xs px-2 py-1 font-mono">
@@ -220,7 +239,8 @@ export default function RemindTab() {
                     </button>
                   </td>
                 </tr>
-              ))
+                )
+              })
             )}
           </tbody>
         </table>

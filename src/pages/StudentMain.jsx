@@ -26,9 +26,10 @@ export default function StudentMain() {
   const [timeLeft, setTimeLeft] = useState(null)
   const [showExitModal, setShowExitModal] = useState(false)
   const [showRemindModal, setShowRemindModal] = useState(false)
-  const [reminder, setReminder] = useState(null)
+  const [reminders, setReminders] = useState([])
+  const [currentReminder, setCurrentReminder] = useState(null)
   const exitModalShownRef = useRef(false)
-  const remindShownRef = useRef(false)
+  const remindShownRef = useRef(new Set())
   const cheerTimeoutRef = useRef(null)
 
   const SLOTS = Array.from({ length: 12 }, (_, i) => {
@@ -60,8 +61,7 @@ export default function StudentMain() {
         .select('*')
         .eq('track', latest.track)
         .eq('cohort', latest.cohort)
-        .single()
-        .then(({ data: remindData }) => { if (remindData) setReminder(remindData) })
+        .then(({ data: remindData }) => { if (remindData) setReminders(remindData) })
     })
   }, [navigate])
 
@@ -109,20 +109,29 @@ export default function StudentMain() {
   }, [student, fetchData])
 
   useEffect(() => {
-    if (!reminder) return
-    const [rh, rm] = reminder.remind_time.slice(0, 5).split(':').map(Number)
+    if (reminders.length === 0) return
+    const parsed = reminders.map((r) => {
+      const [rh, rm] = r.remind_time.slice(0, 5).split(':').map(Number)
+      return { ...r, rh, rm }
+    })
     const check = () => {
       const now = new Date()
-      if (now.getHours() === rh && now.getMinutes() === rm && !remindShownRef.current) {
-        remindShownRef.current = true
-        setShowRemindModal(true)
-        playRemindSound()
+      const h = now.getHours()
+      const m = now.getMinutes()
+      for (const r of parsed) {
+        if (h === r.rh && m === r.rm && !remindShownRef.current.has(r.id)) {
+          remindShownRef.current.add(r.id)
+          setCurrentReminder(r)
+          setShowRemindModal(true)
+          playRemindSound()
+          break
+        }
       }
     }
     check()
     const timer = setInterval(check, 1000)
     return () => clearInterval(timer)
-  }, [reminder])
+  }, [reminders])
 
   useEffect(() => {
     if (!schedule) return
@@ -511,7 +520,7 @@ export default function StudentMain() {
         </div>
       </div>
 
-      {showRemindModal && reminder && (
+      {showRemindModal && currentReminder && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-6">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center overflow-hidden">
             <div className="bg-gradient-to-br from-purple-100 to-pink-100 pt-8 pb-4 flex justify-center">
@@ -519,7 +528,7 @@ export default function StudentMain() {
             </div>
             <div className="px-8 py-6">
               <p className="text-lg font-bold text-gray-800 leading-relaxed mb-6 whitespace-pre-line">
-                {reminder.message}
+                {currentReminder.message}
               </p>
               <button
                 onClick={() => setShowRemindModal(false)}
