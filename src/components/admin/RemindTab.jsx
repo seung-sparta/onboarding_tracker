@@ -186,6 +186,11 @@ export default function RemindTab() {
       </form>
 
       {/* 리마인드 목록 */}
+      {(!form.track || !form.cohort) ? (
+        <div className="bg-gray-800 rounded-2xl px-6 py-10 text-center text-gray-500 text-sm">
+          트랙과 기수를 선택하면 리마인드 목록이 표시됩니다
+        </div>
+      ) : (
       <div className="bg-gray-800 rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-700">
@@ -198,14 +203,14 @@ export default function RemindTab() {
             </tr>
           </thead>
           <tbody>
-            {reminders.length === 0 ? (
+            {reminders.filter((r) => r.track === form.track && r.cohort === form.cohort).length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   등록된 리마인드 설정이 없습니다
                 </td>
               </tr>
             ) : (
-              reminders.map((r) => {
+              reminders.filter((r) => r.track === form.track && r.cohort === form.cohort).map((r) => {
                 const groupCount = reminders.filter((x) => x.track === r.track && x.cohort === r.cohort).length
                 return (
                 <tr key={r.id} className="border-t border-gray-700">
@@ -245,6 +250,7 @@ export default function RemindTab() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }
