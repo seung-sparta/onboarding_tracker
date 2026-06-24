@@ -80,6 +80,12 @@ export default function StudentTab({ onGoToTasks }) {
     fetchStudents()
   }
 
+  const toggleWithdrawn = async (s) => {
+    const newVal = !s.is_withdrawn
+    await supabase.from('students').update({ is_withdrawn: newVal }).eq('id', s.id)
+    fetchStudents()
+  }
+
   const fetchCustomTasks = async (studentId, date) => {
     const { data } = await supabase
       .from('student_custom_tasks')
@@ -181,13 +187,14 @@ export default function StudentTab({ onGoToTasks }) {
       const cohortIdx = header.findIndex((h) => h === '기수')
       const lateIdx = header.findIndex((h) => h === '중간합류자')
       const joinDateIdx = header.findIndex((h) => h === '합류일')
+      const withdrawnIdx = header.findIndex((h) => h === '지원철회자')
 
       if (nameIdx === -1 || trackIdx === -1 || cohortIdx === -1) {
         alert('열 이름이 올바르지 않습니다.\n첫 행에 "이름", "트랙", "기수" 열이 있어야 합니다.')
         return
       }
 
-      const truthy = new Set(['y', 'yes', '예', 'o', 'true', '1', '중간합류', '중간합류자'])
+      const truthy = new Set(['y', 'yes', '예', 'o', 'true', '1', '중간합류', '중간합류자', '지원철회', '지원철회자'])
       const rows = raw.slice(1).map((row, i) => {
         const name = String(row[nameIdx] ?? '').trim()
         const track = String(row[trackIdx] ?? '').trim()
@@ -196,11 +203,13 @@ export default function StudentTab({ onGoToTasks }) {
         const is_late_joiner = truthy.has(rawLate.toLowerCase())
         const rawDate = joinDateIdx !== -1 ? String(row[joinDateIdx] ?? '').trim() : ''
         const join_date = rawDate || null
+        const rawWithdrawn = withdrawnIdx !== -1 ? String(row[withdrawnIdx] ?? '').trim() : ''
+        const is_withdrawn = truthy.has(rawWithdrawn.toLowerCase())
         const errors = []
         if (!name) errors.push('이름 없음')
         if (!track) errors.push('트랙 없음')
         if (!cohort) errors.push('기수 없음')
-        return { _row: i + 2, name, track, cohort, is_late_joiner, join_date, errors }
+        return { _row: i + 2, name, track, cohort, is_late_joiner, join_date, is_withdrawn, errors }
       }).filter((r) => r.name || r.track || r.cohort)
 
       setXlsxRows(rows)
@@ -212,11 +221,12 @@ export default function StudentTab({ onGoToTasks }) {
 
   const downloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['이름', '트랙', '기수', '중간합류자', '합류일'],
-      ['홍길동', 'Unity', '6기', '', ''],
-      ['김철수', 'Unreal', '7기', 'Y', '2026-06-19'],
+      ['이름', '트랙', '기수', '중간합류자', '합류일', '지원철회자'],
+      ['홍길동', 'Unity', '6기', '', '', ''],
+      ['김철수', 'Unreal', '7기', 'Y', '2026-06-19', ''],
+      ['이영희', 'Unity', '6기', '', '', 'Y'],
     ])
-    ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }]
+    ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 12 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '수강생')
     XLSX.writeFile(wb, '수강생_업로드_템플릿.xlsx')
@@ -242,7 +252,7 @@ export default function StudentTab({ onGoToTasks }) {
       }
       if (finalName !== name) renamed.push({ from: name, to: finalName })
       batchKeys.add(`${finalName}||${track}||${cohort}`)
-      return { name: finalName, track, cohort, is_late_joiner, join_date }
+      return { name: finalName, track, cohort, is_late_joiner, join_date, is_withdrawn }
     })
 
     const { error } = await supabase.from('students').insert(rows)
@@ -391,18 +401,27 @@ export default function StudentTab({ onGoToTasks }) {
               <th className="text-left px-4 py-3 text-gray-300 font-semibold">트랙</th>
               <th className="text-left px-4 py-3 text-gray-300 font-semibold">기수</th>
               <th className="text-center px-4 py-3 text-gray-300 font-semibold whitespace-nowrap">중간 합류자</th>
+              <th className="text-center px-4 py-3 text-gray-300 font-semibold whitespace-nowrap">지원 철회</th>
               <th className="px-4 py-3 text-gray-300 font-semibold text-right">액션</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((s) => (
-              <tr key={s.id} className={`border-t border-gray-700 ${s.is_late_joiner ? 'bg-orange-900/10' : ''}`}>
+              <tr
+                key={s.id}
+                className={`border-t border-gray-700 ${s.is_withdrawn ? 'bg-gray-700/40 opacity-70' : s.is_late_joiner ? 'bg-orange-900/10' : ''}`}
+              >
                 <td className="px-4 py-3 text-white">
-                  <div className="flex items-center gap-2">
-                    {s.name}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={s.is_withdrawn ? 'line-through text-gray-400' : ''}>{s.name}</span>
                     {s.is_late_joiner && (
                       <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-semibold">
                         중간합류
+                      </span>
+                    )}
+                    {s.is_withdrawn && (
+                      <span className="text-xs bg-gray-500/30 text-gray-400 px-1.5 py-0.5 rounded font-semibold">
+                        지원철회
                       </span>
                     )}
                   </div>
@@ -426,6 +445,16 @@ export default function StudentTab({ onGoToTasks }) {
                         title="합류 일자"
                       />
                     )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-center">
+                    <button
+                      onClick={() => toggleWithdrawn(s)}
+                      className={`relative inline-flex w-10 h-5 rounded-full transition-colors flex-shrink-0 ${s.is_withdrawn ? 'bg-gray-500' : 'bg-gray-600'}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${s.is_withdrawn ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
@@ -686,6 +715,7 @@ export default function StudentTab({ onGoToTasks }) {
                           <th className="text-left px-3 py-2 text-gray-300 font-semibold">기수</th>
                           <th className="text-center px-3 py-2 text-gray-300 font-semibold whitespace-nowrap">중간합류자</th>
                           <th className="text-left px-3 py-2 text-gray-300 font-semibold whitespace-nowrap">합류일</th>
+                          <th className="text-center px-3 py-2 text-gray-300 font-semibold whitespace-nowrap">지원철회자</th>
                           <th className="text-left px-3 py-2 text-gray-300 font-semibold">상태</th>
                         </tr>
                       </thead>
@@ -706,6 +736,11 @@ export default function StudentTab({ onGoToTasks }) {
                             </td>
                             <td className="px-3 py-2 text-gray-300 text-xs">
                               {row.join_date || <span className="text-gray-600">-</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {row.is_withdrawn
+                                ? <span className="text-xs bg-gray-500/30 text-gray-400 px-1.5 py-0.5 rounded font-semibold">Y</span>
+                                : <span className="text-gray-600 text-xs">-</span>}
                             </td>
                             <td className="px-3 py-2">
                               {row.errors.length === 0 ? (
