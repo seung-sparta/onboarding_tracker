@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Confetti from 'react-confetti'
 import { supabase } from '../lib/supabase'
 import Planner from '../components/Planner'
+import { playRemindSound } from '../lib/playRemindSound'
 
 export default function StudentMain() {
   const navigate = useNavigate()
@@ -172,30 +173,6 @@ export default function StudentMain() {
       setTaskOrder(tasks.map((t) => t.id))
     }
   }, [tasks, student])
-
-  const playRemindSound = () => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const playTone = (freq, start, duration) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.type = 'sine'
-        osc.frequency.value = freq
-        gain.gain.setValueAtTime(0, start)
-        gain.gain.linearRampToValueAtTime(0.4, start + 0.01)
-        gain.gain.linearRampToValueAtTime(0, start + duration)
-        osc.start(start)
-        osc.stop(start + duration)
-      }
-      playTone(880, ctx.currentTime, 0.35)
-      playTone(1100, ctx.currentTime + 0.25, 0.35)
-      playTone(1320, ctx.currentTime + 0.5, 0.55)
-    } catch {
-      // 오디오 미지원 환경에서는 무시
-    }
-  }
 
   const triggerCheer = (message) => {
     setCheerMessage(message)

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { playRemindSound } from '../../lib/playRemindSound'
 
 const DEFAULT_MESSAGE = '퇴실까지 1시간 남았어요! 지금까지 한 일은 모두 체크해주세요!'
 
@@ -144,7 +145,7 @@ export default function RemindTab() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             type="submit"
             disabled={saving || !form.track || !form.cohort || !form.remind_time}
@@ -161,6 +162,16 @@ export default function RemindTab() {
               취소
             </button>
           )}
+          <button
+            type="button"
+            onClick={playRemindSound}
+            className="ml-auto flex items-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-300 hover:text-white text-sm rounded-xl px-4 py-2 transition"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-3-3m3 3l3-3M9.172 15.828a4 4 0 010-5.656" />
+            </svg>
+            소리 테스트
+          </button>
         </div>
       </form>
 
