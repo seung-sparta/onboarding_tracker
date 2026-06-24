@@ -24,9 +24,10 @@ export default function StudentMain() {
   const [schedule, setSchedule] = useState(null)
   const [timeLeft, setTimeLeft] = useState(null)
   const [showExitModal, setShowExitModal] = useState(false)
-  const [show3pmModal, setShow3pmModal] = useState(false)
+  const [showRemindModal, setShowRemindModal] = useState(false)
+  const [reminder, setReminder] = useState(null)
   const exitModalShownRef = useRef(false)
-  const threepmShownRef = useRef(false)
+  const remindShownRef = useRef(false)
   const cheerTimeoutRef = useRef(null)
 
   const SLOTS = Array.from({ length: 12 }, (_, i) => {
@@ -52,6 +53,14 @@ export default function StudentMain() {
       const planKey = `plan_${latest.id}_${new Date().toLocaleDateString('en-CA')}`
       const saved = localStorage.getItem(planKey)
       if (saved) setSavedPlan(JSON.parse(saved))
+
+      supabase
+        .from('reminders')
+        .select('*')
+        .eq('track', latest.track)
+        .eq('cohort', latest.cohort)
+        .single()
+        .then(({ data: remindData }) => { if (remindData) setReminder(remindData) })
     })
   }, [navigate])
 
@@ -99,17 +108,19 @@ export default function StudentMain() {
   }, [student, fetchData])
 
   useEffect(() => {
+    if (!reminder) return
+    const [rh, rm] = reminder.remind_time.slice(0, 5).split(':').map(Number)
     const check = () => {
       const now = new Date()
-      if (now.getHours() === 15 && now.getMinutes() === 0 && !threepmShownRef.current) {
-        threepmShownRef.current = true
-        setShow3pmModal(true)
+      if (now.getHours() === rh && now.getMinutes() === rm && !remindShownRef.current) {
+        remindShownRef.current = true
+        setShowRemindModal(true)
       }
     }
     check()
     const timer = setInterval(check, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [reminder])
 
   useEffect(() => {
     if (!schedule) return
@@ -498,19 +509,18 @@ export default function StudentMain() {
         </div>
       </div>
 
-      {show3pmModal && (
+      {showRemindModal && reminder && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-6">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center overflow-hidden">
             <div className="bg-gradient-to-br from-purple-100 to-pink-100 pt-8 pb-4 flex justify-center">
               <img src="/check-ltani.png" alt="르탄이" className="w-36 h-36 object-contain" />
             </div>
             <div className="px-8 py-6">
-              <p className="text-lg font-bold text-gray-800 leading-relaxed mb-6">
-                퇴실까지 1시간 남았어요!<br />
-                <span className="text-purple-600">지금까지 한 일은 체크해주세요!</span>
+              <p className="text-lg font-bold text-gray-800 leading-relaxed mb-6 whitespace-pre-line">
+                {reminder.message}
               </p>
               <button
-                onClick={() => setShow3pmModal(false)}
+                onClick={() => setShowRemindModal(false)}
                 className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition"
               >
                 확인

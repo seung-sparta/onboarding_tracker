@@ -6,6 +6,7 @@ import TaskTab from '../components/admin/TaskTab'
 import DateMappingTab from '../components/admin/DateMappingTab'
 import SettingsTab from '../components/admin/SettingsTab'
 import ScheduleTab from '../components/admin/ScheduleTab'
+import RemindTab from '../components/admin/RemindTab'
 
 const TABS = [
   { key: 'dashboard', label: '트래킹' },
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'tasks', label: '할 일 관리' },
   { key: 'dates', label: '날짜 매핑' },
   { key: 'schedule', label: '수업 시간' },
+  { key: 'remind', label: '리마인드 관리' },
   { key: 'settings', label: '설정' },
 ]
 
@@ -79,6 +81,7 @@ export default function AdminDashboard() {
         {activeTab === 'tasks' && <TaskTab />}
         {activeTab === 'dates' && <DateMappingTab />}
         {activeTab === 'schedule' && <ScheduleTab />}
+        {activeTab === 'remind' && <RemindTab />}
         {activeTab === 'settings' && <SettingsTab admin={admin} setAdmin={setAdmin} />}
       </main>
     </div>
