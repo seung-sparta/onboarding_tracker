@@ -24,7 +24,9 @@ export default function StudentMain() {
   const [schedule, setSchedule] = useState(null)
   const [timeLeft, setTimeLeft] = useState(null)
   const [showExitModal, setShowExitModal] = useState(false)
+  const [show3pmModal, setShow3pmModal] = useState(false)
   const exitModalShownRef = useRef(false)
+  const threepmShownRef = useRef(false)
   const cheerTimeoutRef = useRef(null)
 
   const SLOTS = Array.from({ length: 12 }, (_, i) => {
@@ -95,6 +97,19 @@ export default function StudentMain() {
         .then(({ data }) => { if (data) setSchedule(data) })
     }
   }, [student, fetchData])
+
+  useEffect(() => {
+    const check = () => {
+      const now = new Date()
+      if (now.getHours() === 15 && now.getMinutes() === 0 && !threepmShownRef.current) {
+        threepmShownRef.current = true
+        setShow3pmModal(true)
+      }
+    }
+    check()
+    const timer = setInterval(check, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!schedule) return
@@ -482,6 +497,28 @@ export default function StudentMain() {
           )}
         </div>
       </div>
+
+      {show3pmModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center overflow-hidden">
+            <div className="bg-gradient-to-br from-purple-100 to-pink-100 pt-8 pb-4 flex justify-center">
+              <img src="/check-ltani.png" alt="르탄이" className="w-36 h-36 object-contain" />
+            </div>
+            <div className="px-8 py-6">
+              <p className="text-lg font-bold text-gray-800 leading-relaxed mb-6">
+                퇴실까지 1시간 남았어요!<br />
+                <span className="text-purple-600">지금까지 한 일은 체크해주세요!</span>
+              </p>
+              <button
+                onClick={() => setShow3pmModal(false)}
+                className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showExitModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-6">
