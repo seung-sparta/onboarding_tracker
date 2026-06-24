@@ -192,6 +192,7 @@ export default function DashboardTab() {
   }
 
   const lowAchievers = students.filter((s) => getPercent(s.id) <= threshold)
+  const withdrawnStudents = students.filter((s) => s.is_withdrawn)
 
   const displayedStudents = students.filter((s) => {
     if (filterRate === 'all') return true
@@ -302,10 +303,24 @@ export default function DashboardTab() {
             <p className="text-gray-400">불러오는 중...</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="bg-gray-800 rounded-2xl p-5">
                   <p className="text-gray-400 text-sm mb-1">총 수강생</p>
                   <p className="text-3xl font-bold text-white">{students.length}명</p>
+                </div>
+                <div className="relative group bg-gray-800 rounded-2xl p-5 cursor-default">
+                  <p className="text-gray-400 text-sm mb-1">지원 철회</p>
+                  <p className="text-3xl font-bold text-gray-400">{withdrawnStudents.length}명</p>
+                  {withdrawnStudents.length > 0 && (
+                    <div className="absolute top-full left-0 mt-2 z-50 hidden group-hover:block bg-gray-900 border border-gray-700 rounded-xl shadow-xl p-3 min-w-[160px]">
+                      <p className="text-gray-500 text-xs mb-2 font-semibold">지원 철회자</p>
+                      <ul className="space-y-1">
+                        {withdrawnStudents.map((s) => (
+                          <li key={s.id} className="text-gray-300 text-sm">{s.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 <div className="bg-gray-800 rounded-2xl p-5">
                   <p className="text-gray-400 text-sm mb-1">달성률 {threshold}% 이하</p>
